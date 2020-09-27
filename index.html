@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <script src="./exif.js"></script>
+  <style>
+    img {
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <input type="file" name="" id="input" accept="image/jpeg,image/jpg,image/png" capture="camera">
+  <div id="wrap"></div>
+  <script>
+    const inputElement = document.getElementById("input");
+    console.log('inputElement')
+    inputElement.addEventListener("change", handleFiles, false);
+    function handleFiles(e) {
+      const file = e.target.files[0]
+      // const blobURL = window.URL.createObjectURL(file)
+      // const image = new Image()
+      // image.src = blobURL
+      // document.body.appendChild(image)
+      EXIF.getData(file, () => {
+        const wrap = document.getElementById("wrap");
+        wrap.innerHTML = ''
+        window.URL = window.URL || window.webkitURL
+        const blobURL = window.URL.createObjectURL(file)
+        console.log(EXIF.getAllTags(file))
+        const p1 = document.createElement('p')
+        const p2 = document.createElement('p')
+        p1.innerHTML = `All Info:${JSON.stringify(EXIF.getAllTags(file))}`
+        p2.innerHTML = `Orientation:${EXIF.getAllTags(file).Orientation}`
+        wrap.appendChild(p1)
+        wrap.appendChild(p2)
+        const image = new Image()
+        image.src = blobURL
+        wrap.appendChild(image)
+    })
+    }
+  </script>
+</body>
+</html>
