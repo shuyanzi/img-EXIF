@@ -8,6 +8,7 @@
   <style>
     img {
       max-width: 100%;
+      /* image-orientation: none; */
     }
   </style>
 </head>
@@ -18,7 +19,15 @@
     const inputElement = document.getElementById("input");
     console.log('inputElement')
     inputElement.addEventListener("change", handleFiles, false);
-    function handleFiles(e) {
+    function callBack(filename, blobURL) {
+      const image = new Image()
+      image.src = blobURL;
+      document.getElementById("wrap").appendChild(image)
+      image.onload = function() {
+        window.URL.revokeObjectURL(blobURL)
+      }
+    }
+    async function handleFiles(e) {
       const file = e.target.files[0]
       // const blobURL = window.URL.createObjectURL(file)
       // const image = new Image()
@@ -29,17 +38,110 @@
         wrap.innerHTML = ''
         window.URL = window.URL || window.webkitURL
         const blobURL = window.URL.createObjectURL(file)
-        console.log(EXIF.getAllTags(file))
         const p1 = document.createElement('p')
         const p2 = document.createElement('p')
-        p1.innerHTML = `All Info:${JSON.stringify(EXIF.getAllTags(file))}`
+        p1.innerHTML = `${blobURL}`
         p2.innerHTML = `Orientation:${EXIF.getAllTags(file).Orientation}`
+        console.log(EXIF.getAllTags(file))
         wrap.appendChild(p1)
         wrap.appendChild(p2)
+        // const image = new Image()
+        // image.src = blobURL
+        // image.style['image-orientation'] = 'none'
+        // wrap.appendChild(image)
         const image = new Image()
-        image.src = blobURL
-        wrap.appendChild(image)
-    })
+        image.src = blobURL;
+        // image.style['image-orientation'] = 'none'
+        image.onload = async (e) => {
+          const blobVal = await resizeToBlob(file, image, EXIF.getAllTags(file).Orientation || 1)
+          uploadImage(blobVal, callBack)
+          window.URL.revokeObjectURL(blobURL)
+        }
+      })
+    }
+    async function resizeToBlob(file, img, Orientation) {
+      let sx = 0 // 开始剪切的 x 坐标位置
+      let sy = 0
+      let degree = 0
+      let { width, height } = img
+      if (width <= 256 || height <= 256) {
+        alert('请上传清晰的照片！')
+        return
+      }
+      if (width > 1600 || height > 1600) {
+        const maxSize = Math.max(width, height)
+        width = width * 1600 / maxSize
+        height = height * 1600 / maxSize
+      }
+      if (!CSS.supports('image-orientation:none')) {
+        switch (Orientation) {
+          case 6: // 顺时针旋转270度 left 再顺时针旋转90度
+            sx = 0
+            sy = -height
+            degree = 90 * Math.PI / 180
+            break
+          case 8: // 顺时针旋转90度 right 再顺时针旋转270度
+            sx = -width
+            sy = 0
+            degree = 3 * 90 * Math.PI / 180
+            break
+          case 3: // 顺时针旋转180度 horizen
+            sx = -width
+            sy = -height
+            break
+        }
+      }
+      // 当图片大小 > maxSize 时，循环压缩
+      let finalBlob = null
+      let zipCount = 0
+      let beIn5MFlag = false
+      let rate = 1.1
+      while (!beIn5MFlag && zipCount < 8) {
+        zipCount++
+        rate = parseFloat((rate - 0.1).toFixed(2))
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        canvas.width = (sx || sy) ? height : width
+        canvas.height = (sx || sy) ? width : height
+        ctx.rotate(degree)
+        ctx.drawImage(img, sx, sy, width, height)
+        finalBlob = await new Promise((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (file.size < blob.size) { 
+              blob = file // 图片越压越大时使用原图，but图片位置未修正。。。
+            }
+            if (blob.size / 1024 / 1024 > 2) {
+              if (zipCount === 8) {
+                if (blob.size / 1024 / 1024 <= 5) {
+                  resolve(blob)
+                  return
+                }
+                alert('请上传小于5M的照片！')
+              }
+              beIn5MFlag = false
+              resolve(null)
+              return
+            }
+            beIn5MFlag = true
+            resolve(blob)
+          }, 'image/jpeg', rate)
+        })
+      }
+      console.log('zipCount:', zipCount, 'rate:', rate, 'origin file:', file && file.size, 'finalBlob file:', finalBlob && finalBlob.size)
+      return finalBlob
+    }
+
+    function uploadImage(file, callBack) {
+      try {
+        // const formData = new FormData()
+        // formData.append('file', file)
+        // formData.append('type', 'jpeg')
+        // const data = await uploadImageApi(formData)
+        const data = { filename: 'filename' }
+        callBack(data && data.filename, URL.createObjectURL(file))
+      } catch (e) {
+        console.log(e)
+      }
     }
   </script>
 </body>
